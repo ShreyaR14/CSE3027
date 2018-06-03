@@ -385,6 +385,7 @@ void *function(void * argv){
     		close(serv_sockfd);
    
             printf("totalSize: %d\n",totalSize );
+            printf("temp_cache: %s\n", temp_cache);
 
            	if(totalSize<=524288){  //오브젝트 크기가 512KB보다 작을때만 큐에저장
 

@@ -79,21 +79,41 @@ void add_node(LRU_LinkedList *list, Node *node)
     pop_node(list);
 }
 
+void print_node(Node *node)
+{
+  printf("%s\t%d bytes\n", node->url, node->data_size);
+}
+
+void print_cache(LRU_LinkedList *list)
+{
+  printf("\n\n-------- Cached All Pages List --------\n");
+  Node *cursor = list->header;
+  printf("Cache Size: %d bytes\n", list->size);
+  int cnt = 0;
+  while (cursor != NULL)
+  {
+    cnt++;
+    printf("no. %d:\t%s\t%d bytes\n", cnt, cursor->url, cursor->data_size);
+    cursor = cursor->next;
+  }
+  printf("----------------------------------------------\n\n");
+}
+
 Node *search_node(LRU_LinkedList *list, char *url)
 {
+  print_cache(list);
   printf("** Start to search Node in Cache **\n");
+
   Node *cursor = list->header;
   while (cursor != NULL)
   {
-    printf("TEST");
     if (strcmp(cursor->url, url) == 0)
     {
-      if (list->size > 1)
+      if (list->count > 1)
       {
         if (cursor == list->header)
         {
           list->header = list->header->next;
-          list->header->prev = NULL;
 
           list->tail->next = cursor;
           cursor->next = NULL;
@@ -116,22 +136,4 @@ Node *search_node(LRU_LinkedList *list, char *url)
     cursor = cursor->next;
   }
   return NULL;
-}
-
-void print_node(Node *node)
-{
-  printf("%s\t%d bytes\n", node->url, node->data_size);
-}
-
-void print_cache(LRU_LinkedList *list)
-{
-  Node *cursor = list->header;
-  printf("Cache Size: %d bytes\n", list->size);
-  int cnt = 0;
-  while (cursor != NULL)
-  {
-    cnt++;
-    printf("no. %d:\t%s\t%d bytes\n", cnt, cursor->url, cursor->data_size);
-    cursor = cursor->next;
-  }
 }
