@@ -12,9 +12,15 @@
 #include "LRUCache.h"
 
 #define BUFF_SIZE 1024
-#define READ_BUFF_SIZE 16384
+#define READ_BUFF_SIZE 1024 * 16
+#define MAX_THREAD 1024
 
 LRU_LinkedList cache;
+
+pthread_mutex_t mutex_cache;
+pthread_mutex_t mutex_log;
+
+void *proxy(void *arg);
 
 void error(char *msg)
 {
@@ -25,6 +31,7 @@ void error(char *msg)
 void log_history(char *message)
 {
   int log_file;
+  pthread_mutex_lock(&mutex_log);
   if ((log_file = open("proxy.log", O_CREAT | O_RDWR | O_APPEND, 0644)) < 0)
     error("Failed to open Log File");
 
@@ -33,12 +40,12 @@ void log_history(char *message)
   if (write(log_file, message, strlen(message)) < 0)
     error("Failed to write log");
   close(log_file);
+  pthread_mutex_unlock(&mutex_log);
 }
 
 int main(int argc, char *argv[])
 {
   char buffer[BUFF_SIZE];
-  char log_message[BUFF_SIZE];
 
   int client_fd, proxy_fd, host_fd;
   int port;
@@ -76,110 +83,136 @@ int main(int argc, char *argv[])
     if (client_fd < 0)
       error("Failed to accept");
 
-    time_t t;
-    t = time(NULL);
-    struct tm *tm = localtime(&t);
-    char *timestamp = asctime(tm);
-    timestamp[strlen(timestamp) - 1] = '\0';
-    printf("Time: %s\n", timestamp);
+    pthread_t thread;
 
-    memset(buffer, 0, BUFF_SIZE);
-    if (read(client_fd, buffer, BUFF_SIZE) < 0)
-    {
-      close(client_fd);
-      error("Failed to read");
-    }
-
-    printf("Origin Request message\n%s", buffer);
-
-    char *req_method = strtok(buffer, " ");
-    char *path = strtok(NULL, " ");
-    char *url = (char *)malloc(strlen(path));
-    strcpy(url, path);
-    strtok(path, "//");
-    char *temp_host = strtok(NULL, "//");
-    char *host_path = (char *)malloc(strlen(temp_host));
-    strcpy(host_path, temp_host);
-    printf("Request Method: %s\n", req_method);
-    printf("URL: %s\n", url);
-    printf("Host: %s\n\n", host_path);
-
-    struct hostent *host = gethostbyname(host_path);
-    if (host == NULL)
-      error("Failed to get host");
-
-    memset(&host_addr, 0, sizeof(host_addr));
-    host_addr.sin_family = AF_INET;
-    host_addr.sin_addr.s_addr = *((unsigned long *)host->h_addr_list[0]);
-    host_addr.sin_port = htons(80);
-    char *ip = inet_ntoa(host_addr.sin_addr);
-    // if (strcmp(req_method, "GET") == 0)
-    // {
-    Node *cachedNode = search_node(&cache, url);
-    // When the page is cached
-    if (cachedNode != NULL)
-    {
-      printf("\n-------- HIT in Cache --------\n");
-      printf("Cached URL: %s\n", cachedNode->url);
-      if (write(client_fd, cachedNode->object, cachedNode->data_size) < 0)
-        error("Failed to write on the Cached");
-      print_cache(&cache);
-      memset(log_message, 0, BUFF_SIZE);
-      sprintf(log_message, "%s %s %s %d\n", timestamp, ip, url, cachedNode->data_size);
-      log_history(log_message);
-    }
-    else
-    {
-      printf("Can't find node in Cache\n\n");
-      if ((host_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
-        error("Failed to open host socket");
-
-      if (connect(host_fd, (struct sockaddr *)&host_addr, sizeof(host_addr)) < 0)
-        error("Failed to connect with host");
-
-      char req_header[BUFF_SIZE];
-      sprintf(req_header, "GET %s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n", url, host_path);
-      printf("Request Header\n%s", req_header);
-
-      if (write(host_fd, req_header, BUFF_SIZE) < 0)
-        error("Failed to write on socket");
-
-      memset(buffer, 0, BUFF_SIZE);
-
-      int data_size = 0;
-      int n = 0;
-      char *object = (char *)malloc(MAX_OBJECT_SIZE);
-      char read_buff[READ_BUFF_SIZE];
-
-      memset(object, 0, MAX_OBJECT_SIZE);
-      memset(read_buff, 0, READ_BUFF_SIZE);
-
-      while ((n = read(host_fd, read_buff, READ_BUFF_SIZE)) > 0)
-      {
-        data_size += write(client_fd, read_buff, n);
-        if (data_size < MAX_OBJECT_SIZE)
-          strcat(object, read_buff);
-        memset(read_buff, 0, READ_BUFF_SIZE);
-      }
-
-      if (data_size <= MAX_OBJECT_SIZE)
-      {
-        printf("** Cache new page **\n");
-        Node *node = create_node(url, object);
-        add_node(&cache, node);
-        print_node(node);
-      }
-
-      print_cache(&cache);
-      close(host_fd);
-
-      memset(log_message, 0, BUFF_SIZE);
-      sprintf(log_message, "%s %s %s %d\n", timestamp, ip, url, data_size);
-
-      log_history(log_message);
-    }
+    if (pthread_create(&thread, NULL, &proxy, (void *)&client_fd) != 0)
+      error("Failed to create Thread");
+    pthread_detach(thread);
   }
   close(client_fd);
   close(proxy_fd);
   return 0;
+}
+
+void *proxy(void *argv)
+{
+
+  struct sockaddr_in host_addr;
+  char log_message[BUFF_SIZE];
+  char proxy_buff[BUFF_SIZE];
+
+  int client_fd = *(int *)argv;
+  int host_fd;
+
+  time_t t;
+  t = time(NULL);
+  struct tm *tm = localtime(&t);
+  char *timestamp = asctime(tm);
+  timestamp[strlen(timestamp) - 1] = '\0';
+  printf("Time: %s\n", timestamp);
+
+  // Read HTTP Request from client
+  memset(proxy_buff, 0, BUFF_SIZE);
+  if (read(client_fd, proxy_buff, BUFF_SIZE) < 0)
+  {
+    close(client_fd);
+    error("Failed to read");
+  }
+
+  printf("Origin Request message\n%s", proxy_buff);
+
+  char *req_method = strtok(proxy_buff, " ");
+  char *path = strtok(NULL, " ");
+  char *url = (char *)malloc(strlen(path));
+  strcpy(url, path);
+  strtok(path, "//");
+  char *temp_host = strtok(NULL, "//");
+  char *host_path = (char *)malloc(strlen(temp_host));
+  strcpy(host_path, temp_host);
+  printf("Request Method: %s\n", req_method);
+  printf("URL: %s\n", url);
+  printf("Host: %s\n\n", host_path);
+
+  struct hostent *host = gethostbyname(host_path);
+  if (host == NULL)
+    error("Failed to get host");
+
+  memset(&host_addr, 0, sizeof(host_addr));
+  host_addr.sin_family = AF_INET;
+  host_addr.sin_addr.s_addr = *((unsigned long *)host->h_addr_list[0]);
+  host_addr.sin_port = htons(80);
+  char *ip = inet_ntoa(host_addr.sin_addr);
+
+  pthread_mutex_lock(&mutex_cache);
+  Node *cachedNode = search_node(&cache, url);
+  pthread_mutex_unlock(&mutex_cache);
+  // When the page is cached
+  if (cachedNode != NULL)
+  {
+    printf("\n-------- HIT in Cache --------\n");
+    printf("Cached URL: %s\n", cachedNode->url);
+    if (write(client_fd, cachedNode->object, cachedNode->data_size) < 0)
+      error("Failed to write on the Cached");
+    pthread_mutex_lock(&mutex_cache);
+    print_cache(&cache);
+    pthread_mutex_unlock(&mutex_cache);
+    memset(log_message, 0, BUFF_SIZE);
+    sprintf(log_message, "%s %s %s %d\n", timestamp, ip, url, cachedNode->data_size);
+    log_history(log_message);
+  }
+  else
+  {
+    printf("Can't find node in Cache\n\n");
+    if ((host_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
+      error("Failed to open host socket");
+
+    if (connect(host_fd, (struct sockaddr *)&host_addr, sizeof(host_addr)) < 0)
+      error("Failed to connect with host");
+
+    char req_header[BUFF_SIZE];
+    sprintf(req_header, "GET %s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n", url, host_path);
+    printf("Request Header\n%s", req_header);
+
+    if (write(host_fd, req_header, BUFF_SIZE) < 0)
+      error("Failed to write on socket");
+
+    memset(proxy_buff, 0, BUFF_SIZE);
+
+    int data_size = 0;
+    int n = 0;
+    char *object = (char *)malloc(MAX_OBJECT_SIZE);
+    char read_buff[READ_BUFF_SIZE];
+
+    memset(object, 0, MAX_OBJECT_SIZE);
+    memset(read_buff, 0, READ_BUFF_SIZE);
+
+    while ((n = read(host_fd, read_buff, READ_BUFF_SIZE)) > 0)
+    {
+      data_size += write(client_fd, read_buff, n);
+      if (data_size < MAX_OBJECT_SIZE)
+        strcat(object, read_buff);
+      memset(read_buff, 0, READ_BUFF_SIZE);
+    }
+
+    if (data_size <= MAX_OBJECT_SIZE)
+    {
+      printf("** Cache new page **\n");
+      Node *node = create_node(url, object);
+      pthread_mutex_lock(&mutex_cache);
+      add_node(&cache, node);
+      print_node(node);
+      pthread_mutex_unlock(&mutex_cache);
+    }
+
+    pthread_mutex_lock(&mutex_cache);
+    print_cache(&cache);
+    pthread_mutex_unlock(&mutex_cache);
+    close(host_fd);
+
+    memset(log_message, 0, BUFF_SIZE);
+    sprintf(log_message, "%s %s %s %d\n", timestamp, ip, url, data_size);
+
+    log_history(log_message);
+  }
+  pthread_exit(0);
 }
