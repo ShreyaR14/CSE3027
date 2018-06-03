@@ -118,14 +118,11 @@ int main(int argc, char *argv[])
       memset(&host_addr, 0, sizeof(host_addr));
       host_addr.sin_family = AF_INET;
       host_addr.sin_addr.s_addr = *((unsigned long *)host->h_addr_list[0]);
-      // memmove(&host_addr.sin_addr.s_addr, host->h_addr_list[0], host->h_length);
       host_addr.sin_port = htons(80);
 
       if (connect(host_fd, (struct sockaddr *)&host_addr, sizeof(host_addr)) < 0)
         error("Failed to connect with host");
 
-      // sprintf(req_header, "GET %s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n", url, host_path);
-      // printf("%s", req_header);
       if (write(host_fd, req_header, BUFF_SIZE) < 0)
         error("Failed to write on socket");
 

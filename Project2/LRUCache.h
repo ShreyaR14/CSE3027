@@ -85,6 +85,7 @@ Node *search_node(LRU_LinkedList *list, char *url)
   Node *cursor = list->header;
   while (cursor != NULL)
   {
+    printf("TEST");
     if (strcmp(cursor->url, url) == 0)
     {
       if (list->size > 1)
