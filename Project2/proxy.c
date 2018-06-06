@@ -170,7 +170,10 @@ void *proxy(void *argv)
       error("Failed to connect with host");
 
     char req_header[BUFF_SIZE];
-    sprintf(req_header, "GET %s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n", url, host_path);
+    char *custom_url = (char *)malloc(strlen(url));
+    custom_url += (strlen("http://") + strlen(host_path));
+    printf("custom_url\n%s\n\n\n", custom_url);
+    sprintf(req_header, "%s %s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n", req_method, custom_url, host_path);
     printf("Request Header\n%s", req_header);
 
     if (write(host_fd, req_header, BUFF_SIZE) < 0)
