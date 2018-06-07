@@ -59,6 +59,9 @@ int main(int argc, char *argv[])
 
   init_LRU_LinkedList(&cache);
 
+  pthread_mutex_init(&mutex_cache, NULL);
+  pthread_mutex_init(&mutex_log, NULL);
+
   if (argc < 2)
     error("Port is not provided");
 
@@ -78,7 +81,7 @@ int main(int argc, char *argv[])
   if (bind(proxy_fd, (struct sockaddr *)&proxy_addr, sizeof(proxy_addr)) < 0)
     error("Failed to bind");
 
-  listen(proxy_fd, 5); // 5 is count of Backlog queue
+  listen(proxy_fd, 40); // 40 is count of Backlog queue
 
   printf("-------- Start to proxy --------\n\n");
   pthread_t thread[MAX_THREAD];
@@ -135,6 +138,7 @@ void *proxy(void *argv)
     close(client_fd);
     error("Failed to read");
   }
+  pthread_mutex_unlock(&mutex_cache);
   printf("proxy buff %s\n", proxy_buff);
 
   printf("Origin Request message\n%s", proxy_buff);
@@ -166,6 +170,7 @@ void *proxy(void *argv)
   host_addr.sin_port = htons(80);
   char *ip = inet_ntoa(host_addr.sin_addr);
 
+  pthread_mutex_lock(&mutex_cache);
   Node *cachedNode = search_node(&cache, url);
   pthread_mutex_unlock(&mutex_cache);
   // When the page is cached
