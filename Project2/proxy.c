@@ -5,7 +5,7 @@
 #include <netinet/in.h> // constants and structures needed for internet domain addresses, e.g. sockaddr_in
 #include <fcntl.h>      //O_WRONLY
 #include <unistd.h>     //write(), close()
-#include <strings.h>
+#include <string.h>
 #include <netdb.h>
 #include <pthread.h>
 #include <arpa/inet.h>
