@@ -62,6 +62,16 @@ void pop_node(LRU_LinkedList *list)
 
 void add_node(LRU_LinkedList *list, Node *node)
 {
+  Node *cursor = list->header;
+  while (cursor != NULL)
+  {
+    if (strcmp(cursor->url, node->url) == 0)
+    {
+      return;
+    }
+    cursor = cursor->next;
+  }
+
   if (list->count == 0)
   {
     list->header = node;
@@ -112,6 +122,7 @@ Node *search_node(LRU_LinkedList *list, char *url)
   Node *cursor = list->header;
   while (cursor != NULL)
   {
+    printf("??\n");
     if (strcmp(cursor->url, url) == 0)
     {
       if (list->count > 1)
