@@ -19,6 +19,7 @@ typedef struct Node
   char object[MAX_OBJECT_SIZE];
 } Node;
 
+void print_node(Node *node);
 void init_LRU_LinkedList(LRU_LinkedList *list)
 {
   list->header = NULL;
@@ -41,7 +42,7 @@ Node *create_node(char *url, char *object)
   return node;
 }
 
-Node *pop_node(LRU_LinkedList *list)
+void pop_node(LRU_LinkedList *list)
 {
   list->count--;
   list->size -= list->header->data_size;
@@ -54,9 +55,9 @@ Node *pop_node(LRU_LinkedList *list)
   else
   {
     list->header = list->header->next;
+    free(list->header->prev);
     list->header->prev = NULL;
   }
-  return list->header;
 }
 
 void add_node(LRU_LinkedList *list, Node *node)
@@ -76,7 +77,11 @@ void add_node(LRU_LinkedList *list, Node *node)
   list->count++;
   list->size += node->data_size;
   while (list->size > MAX_CACHE_SIZE)
+  {
+    printf("Cache Overflow, Pop the oldest node\nPOP: ");
+    print_node(list->header);
     pop_node(list);
+  }
 }
 
 void print_node(Node *node)

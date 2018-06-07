@@ -75,6 +75,8 @@ int main(int argc, char *argv[])
   listen(proxy_fd, 5); // 5 is count of Backlog queue
 
   printf("-------- Start to proxy --------\n\n");
+  pthread_t thread[MAX_THREAD];
+  int thread_cnt = 0;
 
   while (1)
   {
@@ -83,11 +85,10 @@ int main(int argc, char *argv[])
     if (client_fd < 0)
       error("Failed to accept");
 
-    pthread_t thread;
-
-    if (pthread_create(&thread, NULL, &proxy, (void *)&client_fd) != 0)
+    if (pthread_create(&thread[thread_cnt], NULL, &proxy, (void *)&client_fd) != 0)
       error("Failed to create Thread");
-    pthread_detach(thread);
+    pthread_detach(thread[thread_cnt]);
+    thread_cnt++;
   }
   close(client_fd);
   close(proxy_fd);
@@ -169,8 +170,10 @@ void *proxy(void *argv)
     if (connect(host_fd, (struct sockaddr *)&host_addr, sizeof(host_addr)) < 0)
       error("Failed to connect with host");
 
-    char req_header[BUFF_SIZE];
+    char req_header[BUFF_SIZE * 10];
     char *custom_url = (char *)malloc(strlen(url));
+    memset(custom_url, 0, strlen(url));
+    strcpy(custom_url, url);
     custom_url += (strlen("http://") + strlen(host_path));
     printf("custom_url\n%s\n\n\n", custom_url);
     sprintf(req_header, "%s %s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n", req_method, custom_url, host_path);
@@ -192,9 +195,9 @@ void *proxy(void *argv)
     while ((n = read(host_fd, read_buff, READ_BUFF_SIZE)) > 0)
     {
       data_size += write(client_fd, read_buff, n);
-      if (data_size < MAX_OBJECT_SIZE)
+      if (data_size <= MAX_OBJECT_SIZE)
         strcat(object, read_buff);
-      memset(read_buff, 0, READ_BUFF_SIZE);
+      memset(read_buff, '\0', READ_BUFF_SIZE);
     }
 
     if (data_size <= MAX_OBJECT_SIZE)
