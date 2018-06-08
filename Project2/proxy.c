@@ -85,6 +85,7 @@ int main(int argc, char *argv[])
 
   printf("-------- Start to proxy --------\n\n");
   pthread_t thread[MAX_THREAD];
+  memset(thread, '\0', sizeof(thread));
   int thread_cnt = 0;
 
   while (1)
@@ -139,6 +140,13 @@ void *proxy(void *argv)
   pthread_mutex_unlock(&mutex_cache);
 
   printf("Origin Request message\n%s", proxy_buff);
+  printf("no: %d\n", strcmp(proxy_buff, ""));
+
+  if (strcmp(proxy_buff, "") == 0)
+  {
+    printf("** Thread #%d is terminated\n", thread_no);
+    pthread_exit(0);
+  }
 
   char *req_method = strtok(proxy_buff, " ");
   char *path = strtok(NULL, " ");
