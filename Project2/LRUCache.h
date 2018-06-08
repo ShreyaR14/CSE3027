@@ -122,7 +122,6 @@ Node *search_node(LRU_LinkedList *list, char *url)
   Node *cursor = list->header;
   while (cursor != NULL)
   {
-    printf("??\n");
     if (strcmp(cursor->url, url) == 0)
     {
       if (list->count > 1)

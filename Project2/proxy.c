@@ -17,8 +17,8 @@
 
 LRU_LinkedList cache;
 
-pthread_mutex_t mutex_cache;
-pthread_mutex_t mutex_log;
+pthread_mutex_t mutex_cache = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mutex_log = PTHREAD_MUTEX_INITIALIZER;
 
 typedef struct thread_fd
 {
@@ -67,12 +67,12 @@ int main(int argc, char *argv[])
 
   port = atoi(argv[1]);
 
-  if ((proxy_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+  if ((proxy_fd = socket(PF_INET, SOCK_STREAM, 0)) < 0)
     error("Failed to open proxy socket");
 
   memset(&proxy_addr, '\0', sizeof(proxy_addr));
   proxy_addr.sin_family = AF_INET;
-  proxy_addr.sin_addr.s_addr = INADDR_ANY;
+  proxy_addr.sin_addr.s_addr = htonl(INADDR_ANY);
   proxy_addr.sin_port = htons(port);
 
   int opt = 1;
@@ -112,7 +112,7 @@ void *proxy(void *argv)
 {
   struct sockaddr_in host_addr;
   char log_message[BUFF_SIZE];
-  char proxy_buff[BUFF_SIZE];
+  char proxy_buff[READ_BUFF_SIZE];
 
   thread_fd *thread_socket = (thread_fd *)argv;
   int client_fd = thread_socket->client_fd;
@@ -130,10 +130,10 @@ void *proxy(void *argv)
 
   // Read HTTP Request from client
   printf("proxy buff %s\n", proxy_buff);
-  memset(proxy_buff, '\0', BUFF_SIZE);
+  memset(proxy_buff, '\0', READ_BUFF_SIZE);
   printf("proxy buff %s\n", proxy_buff);
   pthread_mutex_lock(&mutex_cache);
-  if (read(client_fd, proxy_buff, BUFF_SIZE) < 0)
+  if (read(client_fd, proxy_buff, READ_BUFF_SIZE) < 0)
   {
     close(client_fd);
     error("Failed to read");
@@ -144,15 +144,11 @@ void *proxy(void *argv)
   printf("Origin Request message\n%s", proxy_buff);
 
   char *req_method = strtok(proxy_buff, " ");
-  printf("TEST3\n");
   char *path = strtok(NULL, " ");
-  printf("TEST4 %s\n", path);
   char *url = (char *)malloc(strlen(path));
 
-  printf("TEST2\n");
   strcpy(url, path);
   strtok(path, "//");
-  printf("TEST\n");
   char *temp_host = strtok(NULL, "//");
   char *host_path = (char *)malloc(strlen(temp_host));
   strcpy(host_path, temp_host);
@@ -211,7 +207,7 @@ void *proxy(void *argv)
     if (write(host_fd, req_header, BUFF_SIZE) < 0)
       error("Failed to write on socket");
 
-    memset(proxy_buff, '\0', BUFF_SIZE);
+    memset(proxy_buff, '\0', READ_BUFF_SIZE);
 
     int data_size = 0;
     int n = 0;
